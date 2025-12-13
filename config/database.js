@@ -1,13 +1,13 @@
 import mongoose from "mongoose";
 
-async function connectDB() {
+const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("MongoDB connected");
+    // mongoose v6+ no longer requires the old parser/ topology options
+    const conn = await mongoose.connect(process.env.MONGO_URI);
+    console.log(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
     console.error("DB connection failed", error);
-    process.exit(1);
   }
-}
+};
 
 export default connectDB;

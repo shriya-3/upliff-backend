@@ -1,27 +1,39 @@
 import express from "express";
 import cors from "cors";
+import dotenv from "dotenv";
+import path from "path";
+import connectDB from "./config/database.js";
 
+import communityRoutes from "./routes/communityRoutes.js";
 import postRoutes from "./routes/postRoutes.js";
+import commentRoutes from "./routes/commentRoutes.js";
+
+dotenv.config();
+
 const app = express();
+const PORT = process.env.PORT || 5000;
 
-
-app.use("/api/posts", postRoutes);
-
-
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-const communities = [
-  { id: 1, name: "Coping Skills", description: "Learn coping skills", image: "/coping.png" },
-  { id: 2, name: "Academic Pressures", description: "Handle school stress", image: "/school.png" },
-  { id: 3, name: "Anxiety Management", description: "Tips for managing anxiety", image: "/anxiety.png" },
-  { id: 4, name: "Relationships", description: "Navigating people + emotions", image: "/relationships.png" },
-  { id: 5, name: "Mindfulness", description: "Calming practices + growth", image: "/practices.png" },
+// Connect to MongoDB
+await connectDB();
 
-];
+// API Routes
+app.use("/api/communities", communityRoutes);
+app.use("/api/communities/:id/posts", postRoutes);
+app.use("/api/posts/:postId/comments", commentRoutes);
 
-app.get("/api/communities", (req, res) => {
-  res.json(communities);
+// Serve React frontend (build folder)
+const __dirname = path.resolve();
+app.use(express.static(path.join(__dirname, "build")));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
-app.listen(5000, () => console.log("Server running on port 5000"));
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});

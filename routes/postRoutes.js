@@ -1,76 +1,69 @@
 import express from "express";
-const router = express.Router();
+import mongoose from "mongoose";
+import Post from "../models/Post.js";
+import Comment from "../models/Comment.js"; // make sure this exists
 
-// In-memory posts data
-let posts = [
-  {
-    id: 1,
-    communityId: 1,
-    title: "Tips for coping with stress",
-    author: "Alice",
-    body: "Try deep breathing exercises.",
-    comments: [
-      { id: 1, user: "Bob", text: "Thanks, this helped me!" }
-    ]
-  },
-  {
-    id: 2,
-    communityId: 2,
-    title: "Managing homework load",
-    author: "Charlie",
-    body: "Break tasks into small chunks.",
-    comments: []
+const router = express.Router({ mergeParams: true }); // important for parent route params
+
+// 🔹 Get all posts for a community with comment counts
+router.get("/", async (req, res) => {
+  try {
+    const communityId = new mongoose.Types.ObjectId(req.params.id);
+
+    const posts = await Post.aggregate([
+      { $match: { communityId } },
+      { $sort: { created: -1 } }, // newest first
+      {
+        $lookup: {
+          from: "comments", // MongoDB collection name
+          localField: "_id",
+          foreignField: "postId",
+          as: "comments",
+        },
+      },
+      {
+        $addFields: {
+          commentsCount: { $size: "$comments" }, // add comment count
+        },
+      },
+      { $project: { comments: 0 } }, // remove actual comments for list
+    ]);
+
+    res.json(posts);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
   }
-];
-
-// --------------------
-// Get posts for a community
-// --------------------
-router.get("/:communityId", (req, res) => {
-  const communityPosts = posts.filter(
-    (p) => p.communityId === parseInt(req.params.communityId)
-  );
-  res.json(communityPosts);
 });
 
-// --------------------
-// Create a new post in a community
-// --------------------
-router.post("/:communityId", (req, res) => {
-  const { title, author, body } = req.body;
-  if (!title || !author || !body) {
-    return res.status(400).json({ message: "All fields are required" });
+// 🔹 Create a post
+router.post("/", async (req, res) => {
+  try {
+    const post = await Post.create({
+      communityId: new mongoose.Types.ObjectId(req.params.id),
+      title: req.body.title,
+      body: req.body.body,
+      author: req.body.author,
+    });
+
+    res.status(201).json(post);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
   }
-
-  const newPost = {
-    id: posts.length + 1,
-    communityId: parseInt(req.params.communityId),
-    title,
-    author,
-    body,
-    comments: []
-  };
-
-  posts.push(newPost);
-  res.status(201).json(newPost);
 });
 
-// --------------------
-// Add a comment to a post
-// --------------------
-router.post("/:postId/comments", (req, res) => {
-  const { user, text } = req.body;
-  if (!user || !text) {
-    return res.status(400).json({ message: "Both user and text are required" });
+// 🔹 Get a single post
+router.get("/:postId", async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    // optionally include comments if you want on single post page
+    const comments = await Comment.find({ postId: post._id }).sort({ created: 1 }); // oldest first
+    res.json({ ...post.toObject(), comments });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
-
-  const post = posts.find((p) => p.id === parseInt(req.params.postId));
-  if (!post) return res.status(404).json({ message: "Post not found" });
-
-  const newComment = { id: post.comments.length + 1, user, text };
-  post.comments.push(newComment);
-
-  res.status(201).json(newComment);
 });
 
 export default router;
